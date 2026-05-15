@@ -1,0 +1,28 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/aead/gcm/vclmulavx2.rs
+
+use super::{ ffi::KeyValue, HTable, UpdateBlock, Xi };
+use crate::{ aead::gcm::ffi::BLOCK_LEN, cpu::intel::{ Avx2, VAesClmul }, polyfill::slice::AsChunks };
+#[derive(Clone)]
+pub struct Key {
+ h_table: HTable,
+}
+
+impl Key {
+ fn new(value: KeyValue, _cpu: (Avx2, VAesClmul)) -> Self {
+ Self { h_table: unsafe { htable_new!(gcm_init_vpclmulqdq_avx2, value) } }
+ }
+ 
+ fn inner(&self) -> &HTable {
+ &self.h_table
+ }
+ 
+}
+
+impl UpdateBlock for Key {
+ fn update_block(&self, xi: &mut Xi, a: [u8; BLOCK_LEN]) {
+ let _ = (&a).into();
+ unsafe { ghash!(gcm_ghash_vpclmulqdq_avx2_1, xi, &self.h_table, input) }
+ }
+ 
+}
+

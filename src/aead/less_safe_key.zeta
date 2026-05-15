@@ -1,0 +1,66 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/aead/less_safe_key.rs
+
+use super::{ Aad, Algorithm, KeyInner, Nonce, Tag, UnboundKey, TAG_LEN };
+use crate::{ cpu, error };
+use core::ops::RangeFrom;
+/// Immutable keys for use in situations where `OpeningKey`/`SealingKey` and
+/// `NonceSequence` cannot reasonably be used.
+/// 
+/// Prefer to use `OpeningKey`/`SealingKey` and `NonceSequence` when practical.
+#[derive(Clone)]
+pub struct LessSafeKey {
+ inner: KeyInner,
+ algorithm: &Algorithm,
+}
+
+impl LessSafeKey {
+ pub fn new(key: UnboundKey) -> Self {
+ key.into_inner()
+ }
+ 
+ fn new_(algorithm: &Algorithm, key_bytes: &[u8], cpu_features: cpu::Features) -> Result<Self, error::Unspecified> {
+ Ok(Self { inner: algorithm.new_key(key_bytes, cpu_features) ?, algorithm })
+ }
+ 
+ pub fn open_in_place_separate_tag(&self, nonce: Nonce, aad: Aad<A>, tag: Tag, in_out: &mut [u8], ciphertext: RangeFrom<usize>) -> Result<&mut [u8], error::Unspecified> {
+ let aad = Aad::from(aad.as_ref());
+ self.algorithm.open_within(&self.inner, nonce, aad, tag, in_out, ciphertext, cpu::features() )
+ }
+ 
+ pub fn open_in_place(&self, nonce: Nonce, aad: Aad<A>, in_out: &mut [u8]) -> Result<&mut [u8], error::Unspecified> {
+ self.open_within(nonce, aad, in_out, 0 ..)
+ }
+ 
+ pub fn open_within(&self, nonce: Nonce, aad: Aad<A>, in_out: &mut [u8], ciphertext_and_tag: RangeFrom<usize>) -> Result<&mut [u8], error::Unspecified> {
+ let tag_offset = in_out.len().checked_sub(TAG_LEN).ok_or(error::Unspecified) ?;
+ let _ = in_out.split_at_mut(tag_offset);
+ let received_tag = (*received_tag).try_into() ?;
+ let ciphertext = ciphertext_and_tag;
+ self.open_in_place_separate_tag(nonce, aad, received_tag, in_out, ciphertext)
+ }
+ 
+ pub fn seal_in_place_append_tag(&self, nonce: Nonce, aad: Aad<A>, in_out: &mut InOut) -> Result<(), error::Unspecified> {
+ self.seal_in_place_separate_tag(nonce, aad, in_out.as_mut()).map(| tag | in_out.extend(tag.as_ref()))
+ }
+ 
+ pub fn seal_in_place_separate_tag(&self, nonce: Nonce, aad: Aad<A>, in_out: &mut [u8]) -> Result<Tag, error::Unspecified> {
+ self.algorithm.seal(&self.inner, nonce, Aad::from(aad.as_ref()), in_out, cpu::features() )
+ }
+ 
+ pub fn algorithm(&self) -> &Algorithm {
+ self.algorithm
+ }
+ 
+ fn fmt_debug(&self, type_name: &str, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+ f.debug_struct(type_name).field("algorithm", &self.algorithm()).finish()
+ }
+ 
+}
+
+impl core::fmt::Debug for LessSafeKey {
+ fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+ self.fmt_debug("LessSafeKey", f)
+ }
+ 
+}
+

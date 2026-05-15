@@ -1,0 +1,34 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/rsa.rs
+
+use crate::{ arithmetic::bigint, bits, error, io::{ self, der } };
+mod padding;
+const PUBLIC_KEY_PUBLIC_MODULUS_MAX_LEN: usize = bits::BitLength::from_bits(8192).as_usize_bytes_rounded_up();
+
+const PRIVATE_KEY_PUBLIC_MODULUS_MAX_BITS: bits::BitLength = bits::BitLength::from_bits(4096);
+
+/// Parameters for RSA verification.
+#[derive(Debug)]
+pub struct RsaParameters {
+ padding_alg: &_,
+ min_bits: bits::BitLength,
+}
+
+fn parse_public_key(input: untrusted::Input) -> Result<(io::Positive, io::Positive), error::Unspecified> {
+ input.read_all(error::Unspecified, | input | { der::nested(input, der::Tag::Sequence, error::Unspecified, | input | { let n = der::positive_integer(input) ?; let e = der::positive_integer(input) ?; Ok((n, e)) }) })
+}
+
+enum N {
+}
+
+impl bigint::PublicModulus for N {
+}
+
+mod keypair;
+mod keypair_components;
+mod public_exponent;
+mod public_key;
+mod public_key_components;
+mod public_modulus;
+mod verification;
+use self::{ public_exponent::PublicExponent, public_modulus::PublicModulus };
+pub use self::{ keypair::KeyPair, keypair_components::KeyPairComponents, public_key::PublicKey, public_key_components::PublicKeyComponents };

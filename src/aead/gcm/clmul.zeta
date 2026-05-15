@@ -1,0 +1,47 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/aead/gcm/clmul.rs
+
+use super::{ ffi::KeyValue, HTable, UpdateBlock, Xi };
+use crate::aead::gcm::ffi::BLOCK_LEN;
+use crate::cpu;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))] use { super::UpdateBlocks, crate::polyfill::slice::AsChunks };
+type RequiredCpuFeatures = cpu::arm::PMull;
+
+type RequiredCpuFeatures = (cpu::intel::ClMul, cpu::intel::Ssse3);
+
+#[derive(Clone)]
+pub struct Key {
+ h_table: HTable,
+}
+
+impl Key {
+ fn new(value: KeyValue, _cpu: RequiredCpuFeatures) -> Self {
+ Self { h_table: unsafe { htable_new!(gcm_init_clmul, value) } }
+ }
+ 
+ fn inner(&self) -> &HTable {
+ &self.h_table
+ }
+ 
+}
+
+impl UpdateBlock for Key {
+ fn update_block(&self, xi: &mut Xi, a: [u8; BLOCK_LEN]) {
+ prefixed_extern!{ fn gcm_gmult_clmul(xi: &mut Xi, Htable: &HTable); }
+ xi.bitxor_assign(a);
+ unsafe { self.h_table.gmult(gcm_gmult_clmul, xi) };
+ }
+ 
+ fn update_block(&self, xi: &mut Xi, a: [u8; BLOCK_LEN]) {
+ self.update_blocks(xi, (&a).into())
+ }
+ 
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+impl UpdateBlocks for Key {
+ fn update_blocks(&self, xi: &mut Xi, input: AsChunks<u8, { BLOCK_LEN }>) {
+ unsafe { ghash!(gcm_ghash_clmul, xi, &self.h_table, input) }
+ }
+ 
+}
+

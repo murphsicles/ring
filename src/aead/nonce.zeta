@@ -1,0 +1,34 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/aead/nonce.rs
+
+use crate::error;
+/// A nonce for a single AEAD opening or sealing operation.
+/// 
+/// The user must ensure, for a particular key, that each nonce is unique.
+/// 
+/// `Nonce` intentionally doesn't implement `Clone` to ensure that each one is
+/// consumed at most once.
+pub struct Nonce {
+ ([u8; NONCE_LEN]),
+}
+
+impl Nonce {
+ pub fn try_assume_unique_for_key(value: &[u8]) -> Result<Self, error::Unspecified> {
+ let _ = value.try_into() ?;
+ Ok(Self::assume_unique_for_key(*value))
+ }
+ 
+ pub fn assume_unique_for_key(value: [u8; NONCE_LEN]) -> Self {
+ Self(value)
+ }
+ 
+}
+
+impl AsRef<[u8; NONCE_LEN]> for Nonce {
+ fn as_ref(&self) -> &[u8; NONCE_LEN] {
+ &self.0
+ }
+ 
+}
+
+pub const NONCE_LEN: usize = 96 / 8;
+

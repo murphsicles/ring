@@ -1,0 +1,7 @@
+[package]
+name = "@crypto/ring"
+version = "0.17.14"
+description = "Cryptography library for Zeta — AES-GCM, SHA-2, HMAC, ECDSA, Ed25519, TLS 1.3"
+license = "MIT"
+repository = "https://github.com/murphsicles/ring"
+readme = "README.md"

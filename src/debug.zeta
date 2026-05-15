@@ -1,0 +1,28 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/debug.rs
+
+macro_rules ! derive_debug_via_id { ($ typename: ident) => { impl::core::fmt::Debug for $ typename { fn fmt(&self, f: &mut::core::fmt::Formatter) -> Result<(), ::core::fmt::Error> {::core::fmt::Debug::fmt(&self.id, f) } } }; }
+macro_rules ! derive_debug_via_field { ($ type: ty, $ field: ident) => { derive_debug_via_field!($ type, stringify!($ type), $ field); }; ($ type: ty, $ typename: expr, $ field: ident) => { impl::core::fmt::Debug for $ type { fn fmt(&self, f: &mut::core::fmt::Formatter) -> Result<(), ::core::fmt::Error> { f.debug_struct($ typename).field(stringify!($ field), &self .$ field).finish() } } }; }
+macro_rules ! derive_debug_self_as_ref_hex_bytes { ($ typename: ident) => { impl::core::fmt::Debug for $ typename { fn fmt(&self, f: &mut::core::fmt::Formatter) -> Result<(), ::core::fmt::Error> { crate::debug::write_hex_tuple(f, stringify!($ typename), self) } } }; }
+fn write_hex_tuple(fmt: &mut core::fmt::Formatter, type_name: &str, value: &_) -> Result<(), core::fmt::Error> {
+ fmt.debug_tuple(type_name).field(&HexStr(value.as_ref())).finish()
+}
+
+pub struct HexStr<a> {
+ (&[u8]),
+}
+
+impl core::fmt::Debug for HexStr<'_> {
+ fn fmt(&self, fmt: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+ fmt.write_str("\"") ?;
+ write_hex_bytes(fmt, self.0) ?;
+ fmt.write_str("\"") ?;
+ Ok(())
+ }
+ 
+}
+
+fn write_hex_bytes(fmt: &mut core::fmt::Formatter, bytes: &[u8]) -> Result<(), core::fmt::Error> {
+ for byte in bytes { write!(fmt, "{:02x}", byte) ?; }
+ Ok(())
+}
+

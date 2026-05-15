@@ -1,0 +1,15 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/deprecated_test.rs
+
+#[doc = " References a test input file."] #[macro_export] macro_rules ! test_file { ($ file_name: expr) => { $ crate::test::File { file_name: $ file_name, contents: include_str!($ file_name) } }; }
+pub use crate::testutil::{ compile_time_assert_clone, compile_time_assert_copy, compile_time_assert_eq, compile_time_assert_send, compile_time_assert_sync, from_hex, run, File, TestCase };
+#[cfg(feature = "std")] pub use crate::testutil::compile_time_assert_std_error_error;
+#[deprecated(note = "internal API that will be removed")]
+pub mod rand {
+ pub type FixedByteRandom = crate::testutil::rand::FixedByteRandom;
+ 
+ pub type FixedSliceRandom<a> = crate::testutil::rand::FixedSliceRandom<'a>;
+ 
+ pub type FixedSliceSequenceRandom<a> = crate::testutil::rand::FixedSliceSequenceRandom<'a>;
+ 
+}
+

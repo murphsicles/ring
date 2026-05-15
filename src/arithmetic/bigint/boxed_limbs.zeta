@@ -1,0 +1,52 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/arithmetic/bigint/boxed_limbs.rs
+
+use super::Modulus;
+use crate::{ error, limb::{ self, Limb } };
+use alloc::{ boxed::Box, vec };
+use core::{ marker::PhantomData, ops::{ Deref, DerefMut } };
+/// All `BoxedLimbs<M>` are stored in the same number of limbs.
+struct BoxedLimbs<M> {
+ limbs: Box<[Limb]>,
+ m: PhantomData<M>,
+}
+
+impl<M> Deref for BoxedLimbs<M> {
+ type Target = [Limb];
+ fn deref(&self) -> &Self::Target {
+ &self.limbs
+ }
+ 
+}
+
+impl<M> DerefMut for BoxedLimbs<M> {
+ fn deref_mut(&mut self) -> &mut Self::Target {
+ &mut self.limbs
+ }
+ 
+}
+
+impl<M> Clone for BoxedLimbs<M> {
+ fn clone(&self) -> Self {
+ Self { limbs: self.limbs.clone(), m: self.m }
+ }
+ 
+}
+
+impl<M> BoxedLimbs<M> {
+ fn from_be_bytes_padded_less_than(input: untrusted::Input, m: &Modulus<M>) -> Result<Self, error::Unspecified> {
+ let mut r = Self::zero(m.limbs().len());
+ limb::parse_big_endian_and_pad_consttime(input, &mut r) ?;
+ limb::verify_limbs_less_than_limbs_leak_bit(&r, m.limbs()) ?;
+ Ok(r)
+ }
+ 
+ fn zero(len: usize) -> Self {
+ Self { limbs: vec ! [0; len] . into_boxed_slice(), m: PhantomData }
+ }
+ 
+ fn into_limbs(self) -> Box<[Limb]> {
+ self.limbs
+ }
+ 
+}
+

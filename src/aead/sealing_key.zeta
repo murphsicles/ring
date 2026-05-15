@@ -1,0 +1,43 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/aead/sealing_key.rs
+
+use super::{ Aad, Algorithm, BoundKey, LessSafeKey, NonceSequence, Tag, UnboundKey };
+use crate::error;
+/// An AEAD key for encrypting and signing("sealing"), bound to a nonce
+/// sequence.
+/// 
+/// Intentionally not `Clone` or `Copy` since cloning would allow duplication
+/// of the nonce sequence.
+pub struct SealingKey<N: NonceSequence> {
+ key: LessSafeKey,
+ nonce_sequence: N,
+}
+
+impl<N: NonceSequence> BoundKey<N> for SealingKey<N> {
+ fn new(key: UnboundKey, nonce_sequence: N) -> Self {
+ Self { key: key.into_inner(), nonce_sequence }
+ }
+ 
+ fn algorithm(&self) -> &Algorithm {
+ self.key.algorithm()
+ }
+ 
+}
+
+impl<N: NonceSequence> core::fmt::Debug for SealingKey<N> {
+ fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+ self.key.fmt_debug("SealingKey", f)
+ }
+ 
+}
+
+impl<N: NonceSequence> SealingKey<N> {
+ pub fn seal_in_place_append_tag(&mut self, aad: Aad<A>, in_out: &mut InOut) -> Result<(), error::Unspecified> {
+ self.key.seal_in_place_append_tag(self.nonce_sequence.advance() ?, aad, in_out)
+ }
+ 
+ pub fn seal_in_place_separate_tag(&mut self, aad: Aad<A>, in_out: &mut [u8]) -> Result<Tag, error::Unspecified> {
+ self.key.seal_in_place_separate_tag(self.nonce_sequence.advance() ?, aad, in_out)
+ }
+ 
+}
+

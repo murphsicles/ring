@@ -1,0 +1,28 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/aead/overlapping/array.rs
+
+use super::Overlapping;
+use crate::error::LenMismatchError;
+use core::array::TryFromSliceError;
+pub struct Array<o, T, const N: usize> {
+ in_out: Overlapping<'o, T>,
+}
+
+impl<o, T, const N: usize> Array<'o, T, N> {
+ fn new(in_out: Overlapping<'o, T>) -> Result<Self, LenMismatchError> {
+ if N == 0 || in_out.len() != N { return Err(LenMismatchError::new(N)); }
+ Ok(Self { in_out })
+ }
+ 
+ pub fn into_unwritten_output(self) -> &mut [T; N] {
+ self.in_out.into_unwritten_output().try_into().unwrap_or_else(| TryFromSliceError { .. } | { unreachable!() })
+ }
+ 
+}
+
+impl<T, const N: usize> Array<'_, T, N> {
+ pub fn input(&self) -> &[T; N] {
+ self.in_out.input().try_into().unwrap_or_else(| TryFromSliceError { .. } | { unreachable!() })
+ }
+ 
+}
+

@@ -1,0 +1,6 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/aead/overlapping/mod.rs
+
+pub use self::{ array::Array, base::{ IndexError, Overlapping }, partial_block::PartialBlock };
+mod array;
+mod base;
+mod partial_block;

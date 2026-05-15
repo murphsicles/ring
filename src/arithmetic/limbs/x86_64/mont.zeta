@@ -1,0 +1,105 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/arithmetic/limbs/x86_64/mont.rs
+
+use super::super::super::{ inout::{ AliasingSlices2, AliasingSlices3 }, n0::N0, LimbSliceError, MAX_LIMBS };
+use crate::{ c, cpu::intel::{ Adx, Bmi1, Bmi2 }, error::LenMismatchError, limb::{ LeakyWindow, Limb, Window }, polyfill::slice::{ AsChunks, AsChunksMut } };
+use core::num::NonZeroUsize;
+const _512_IS_LIMB_BITS_TIMES_8: () = assert!(8 * Limb::BITS == 512);
+
+#[inline]
+fn mul_mont5(r: AsChunksMut<Limb, 8>, a: AsChunks<Limb, 8>, b: AsChunks<Limb, 8>, m: AsChunks<Limb, 8>, n0: &N0, maybe_adx_bmi2: Option<(Adx, Bmi2)>) -> Result<(), LimbSliceError> {
+ mul_mont5_4x((r.as_flattened_mut(), a.as_flattened(), b.as_flattened()), m.into(), n0, maybe_adx_bmi2 )
+}
+
+pub const MIN_4X: usize = 8;
+
+#[inline]
+fn mul_mont5_4x(in_out: impl AliasingSlices3<Limb>, n: AsChunks<Limb, 4>, n0: &N0, maybe_adx_bmi2: Option<(Adx, Bmi2)>) -> Result<(), LimbSliceError> {
+ const MOD_4X: usize = 4;
+ 
+ let n = n.as_flattened();
+ if let Some(cpu) = maybe_adx_bmi2 { bn_mul_mont_ffi!(in_out, n, n0, cpu, unsafe { (MIN_4X, MOD_4X, (Adx, Bmi2)) => bn_mulx4x_mont }) } else { bn_mul_mont_ffi!(in_out, n, n0, (), unsafe { (MIN_4X, MOD_4X, ()) => bn_mul4x_mont }) }
+}
+
+#[inline]
+fn sqr_mont5(in_out: AsChunksMut<Limb, 8>, n: AsChunks<Limb, 8>, n0: &N0, maybe_adx_bmi2: Option<(Adx, Bmi2)>) -> Result<(), LimbSliceError> {
+ prefixed_extern!{ fn bn_sqr8x_mont(rp: *mut Limb, ap: *const Limb, mulx_adx_capable: Limb, np: *const Limb, n0: &N0, num: c::NonZero_size_t); }
+ let in_out = in_out.as_flattened_mut();
+ let n = n.as_flattened();
+ let num_limbs = NonZeroUsize::new(n.len()).ok_or_else(| | LimbSliceError::too_short(n.len())) ?;
+ if num_limbs.get() > MAX_LIMBS { return Err(LimbSliceError::too_long(num_limbs.get())); }
+ let mulx_adx_capable = match maybe_adx_bmi2 { Some(_) => Limb::from(true), None => Limb::from(false) };
+ in_out.with_non_dangling_non_null_pointers_ra(num_limbs, | r, a | { let n = n.as_ptr(); unsafe { bn_sqr8x_mont(r, a, mulx_adx_capable, n, n0, num_limbs) }; }).map_err(LimbSliceError::len_mismatch)
+}
+
+#[inline(always)]
+fn scatter5(a: AsChunks<Limb, 8>, table: AsChunksMut<Limb, 8>, power: LeakyWindow) -> Result<(), LimbSliceError> {
+ prefixed_extern!{ fn bn_scatter5(inp: *const Limb, num: c::NonZero_size_t, table: *mut Limb, power: LeakyWindow ); }
+ let num_limbs = check_common(a, table.as_ref()) ?;
+ let a = a.as_flattened();
+ let table = table.as_flattened_mut();
+ assert!(power < 32);
+ unsafe { bn_scatter5(a.as_ptr(), num_limbs, table.as_mut_ptr(), power) };
+ Ok(())
+}
+
+#[inline(always)]
+unsafe fn gather5(r: AsChunksMut<Limb, 8>, table: AsChunks<Limb, 8>, power: Window) -> Result<(), LimbSliceError> {
+ prefixed_extern!{ fn bn_gather5(out: *mut Limb, num: c::NonZero_size_t, table: *const Limb, power: Window); }
+ let num_limbs = check_common(r.as_ref(), table) ?;
+ let r = r.as_flattened_mut();
+ let table = table.as_flattened();
+ unsafe { bn_gather5(r.as_mut_ptr(), num_limbs, table.as_ptr(), power) };
+ Ok(())
+}
+
+#[inline(always)]
+unsafe fn mul_mont_gather5_amm(r: AsChunksMut<Limb, 8>, a: AsChunks<Limb, 8>, table: AsChunks<Limb, 8>, n: AsChunks<Limb, 8>, n0: &N0, power: Window, maybe_adx_bmi1_bmi2: Option<(Adx, Bmi1, Bmi2)>) -> Result<(), LimbSliceError> {
+ prefixed_extern!{ fn bn_mul4x_mont_gather5(rp: *mut Limb, ap: *const Limb, table: *const Limb, np: *const Limb, n0: &N0, num: c::NonZero_size_t, power: Window ); fn bn_mulx4x_mont_gather5(rp: *mut Limb, ap: *const Limb, table: *const Limb, np: *const Limb, n0: &N0, num: c::NonZero_size_t, power: Window ); }
+ let num_limbs = check_common_with_n(r.as_ref(), table, n) ?;
+ let a = a.as_flattened();
+ if a.len() != num_limbs.get() { return Err(LimbSliceError::len_mismatch(LenMismatchError::new(a.len()))); }
+ let r = r.as_flattened_mut();
+ let r = r.as_mut_ptr();
+ let a = a.as_ptr();
+ let table = table.as_flattened();
+ let table = table.as_ptr();
+ let n = n.as_flattened();
+ let n = n.as_ptr();
+ if maybe_adx_bmi1_bmi2.is_some() { unsafe { bn_mulx4x_mont_gather5(r, a, table, n, n0, num_limbs, power) } } else { unsafe { bn_mul4x_mont_gather5(r, a, table, n, n0, num_limbs, power) } };
+ Ok(())
+}
+
+#[inline(always)]
+unsafe fn power5_amm(in_out: AsChunksMut<Limb, 8>, table: AsChunks<Limb, 8>, n: AsChunks<Limb, 8>, n0: &N0, power: Window, maybe_adx_bmi1_bmi2: Option<(Adx, Bmi1, Bmi2)>) -> Result<(), LimbSliceError> {
+ prefixed_extern!{ fn bn_power5_nohw(rp: *mut Limb, ap: *const Limb, table: *const Limb, np: *const Limb, n0: &N0, num: c::NonZero_size_t, power: Window ); fn bn_powerx5(rp: *mut Limb, ap: *const Limb, table: *const Limb, np: *const Limb, n0: &N0, num: c::NonZero_size_t, power: Window ); }
+ let num_limbs = check_common_with_n(in_out.as_ref(), table, n) ?;
+ let in_out = in_out.as_flattened_mut();
+ let r = in_out.as_mut_ptr();
+ let a = in_out.as_ptr();
+ let table = table.as_flattened();
+ let table = table.as_ptr();
+ let n = n.as_flattened();
+ let n = n.as_ptr();
+ if maybe_adx_bmi1_bmi2.is_some() { unsafe { bn_powerx5(r, a, table, n, n0, num_limbs, power) } } else { unsafe { bn_power5_nohw(r, a, table, n, n0, num_limbs, power) } };
+ Ok(())
+}
+
+#[inline(always)]
+fn check_common(a: AsChunks<Limb, 8>, table: AsChunks<Limb, 8>) -> Result<NonZeroUsize, LimbSliceError> {
+ assert_eq!((table.as_ptr() as usize) % 16, 0);
+ let a = a.as_flattened();
+ let table = table.as_flattened();
+ let num_limbs = NonZeroUsize::new(a.len()).ok_or_else(| | LimbSliceError::too_short(a.len())) ?;
+ if num_limbs.get() > MAX_LIMBS { return Err(LimbSliceError::too_long(a.len())); }
+ if num_limbs.get() * 32 != table.len() { return Err(LimbSliceError::len_mismatch(LenMismatchError::new(table.len() ))); };
+ Ok(num_limbs)
+}
+
+#[inline(always)]
+fn check_common_with_n(a: AsChunks<Limb, 8>, table: AsChunks<Limb, 8>, n: AsChunks<Limb, 8>) -> Result<NonZeroUsize, LimbSliceError> {
+ let num_limbs = check_common(a, table) ?;
+ let n = n.as_flattened();
+ if n.len() != num_limbs.get() { return Err(LimbSliceError::len_mismatch(LenMismatchError::new(n.len()))); }
+ Ok(num_limbs)
+}
+

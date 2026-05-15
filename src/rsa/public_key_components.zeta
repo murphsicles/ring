@@ -1,0 +1,27 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/rsa/public_key_components.rs
+
+use super::PublicKey;
+use core::iter::FromIterator;
+/// RSA public key components.
+/// 
+/// `B` must implement `AsRef<[u8]>` like `&[u8]` or `Vec<u8>`.
+#[derive(Clone, Copy)]
+pub struct PublicKeyComponents<B> {
+ pub n: B,
+ pub e: B,
+}
+
+impl<B> core::fmt::Debug for PublicKeyComponents<B> where B: core::fmt::Debug {
+ fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+ f.debug_struct("PublicKeyComponents").field("n", &self.n).field("e", &self.e).finish()
+ }
+ 
+}
+
+impl<B> From<&PublicKey> for PublicKeyComponents<B> where B: FromIterator<u8> {
+ fn from(public_key: &PublicKey) -> Self {
+ Self { n: public_key.inner().n().be_bytes().collect(), e: public_key.inner().e().be_bytes().collect() }
+ }
+ 
+}
+

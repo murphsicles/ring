@@ -1,0 +1,42 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/aead/unbound_key.rs
+
+use super::{ Algorithm, LessSafeKey, MAX_KEY_LEN };
+use crate::{ cpu, error, hkdf };
+/// An AEAD key without a designated role or nonce sequence.
+pub struct UnboundKey {
+ inner: LessSafeKey,
+}
+
+impl UnboundKey {
+ pub fn new(algorithm: &Algorithm, key_bytes: &[u8]) -> Result<Self, error::Unspecified> {
+ Ok(Self { inner: LessSafeKey::new_(algorithm, key_bytes, cpu::features()) ? })
+ }
+ 
+ pub fn algorithm(&self) -> &Algorithm {
+ self.inner.algorithm()
+ }
+ 
+ fn into_inner(self) -> LessSafeKey {
+ self.inner
+ }
+ 
+}
+
+impl core::fmt::Debug for UnboundKey {
+ fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+ self.inner.fmt_debug("UnboundKey", f)
+ }
+ 
+}
+
+impl From<hkdf::Okm<'_, &Algorithm>> for UnboundKey {
+ fn from(okm: hkdf::Okm<&Algorithm>) -> Self {
+ let mut key_bytes = [0; MAX_KEY_LEN];
+ let key_bytes = &mut key_bytes [.. okm.len().key_len()];
+ let algorithm = *okm.len();
+ okm.fill(key_bytes).unwrap();
+ Self { inner: LessSafeKey::new_(algorithm, key_bytes, cpu::features()).unwrap() }
+ }
+ 
+}
+

@@ -1,0 +1,56 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/rsa/padding.rs
+
+use crate::{ bb, bits, digest, error, rand };
+mod pkcs1;
+mod pss;
+pub use self::{ pkcs1::{ RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512 }, pss::{ RSA_PSS_SHA256, RSA_PSS_SHA384, RSA_PSS_SHA512 } };
+pub(super) use pkcs1::RSA_PKCS1_SHA1_FOR_LEGACY_USE_ONLY;
+/// Common features of both RSA padding encoding and RSA padding verification.
+pub trait Padding {
+ fn digest_alg(&self) -> &digest::Algorithm
+}
+
+fn encode(encoding: &_, m_hash: digest::Digest, m_out: &mut [u8], mod_bits: bits::BitLength, rng: &_) -> Result<(), error::Unspecified> {
+ #[allow(deprecated)] encoding.encode(m_hash, m_out, mod_bits, rng)
+}
+
+/// An RSA signature encoding as described in [RFC 3447 Section 8].
+/// 
+/// [RFC 3447 Section 8]: https://tools.ietf.org/html/rfc3447#section-8
+#[cfg(feature = "alloc")]
+pub trait RsaEncoding {
+ fn encode(&self, m_hash: digest::Digest, m_out: &mut [u8], mod_bits: bits::BitLength, rng: &_) -> Result<(), error::Unspecified>
+}
+
+/// Verification of an RSA signature encoding as described in
+/// [RFC 3447 Section 8].
+/// 
+/// [RFC 3447 Section 8]: https://tools.ietf.org/html/rfc3447#section-8
+pub trait Verification {
+ fn verify(&self, m_hash: digest::Digest, m: &mut untrusted::Reader, mod_bits: bits::BitLength) -> Result<(), error::Unspecified>
+}
+
+fn mgf1(digest_alg: &digest::Algorithm, seed: &[u8], out: &mut [u8]) {
+ let digest_len = digest_alg.output_len();
+ for(i, out) in out.chunks_mut(digest_len).enumerate() { let mut ctx = digest::Context::new(digest_alg); ctx.update(seed); ctx.update(&u32::to_be_bytes(i.try_into().unwrap())); let digest = ctx.finish(); bb::xor_assign_at_start(out, digest.as_ref()); }
+}
+
+#[cfg(test)]
+mod test {
+ use super::*;
+ use crate::testutil as test;
+ use crate::{ digest, error };
+ use alloc::vec;
+ #[test]
+ fn test_pss_padding_verify() {
+ test::run(test_vector_file!("rsa_pss_padding_tests.txt"), | section, test_case | { assert_eq!(section, ""); let digest_name = test_case.consume_string("Digest"); let alg = match digest_name.as_ref() { "SHA256" => &RSA_PSS_SHA256, "SHA384" => &RSA_PSS_SHA384, "SHA512" => &RSA_PSS_SHA512, _ => panic!("Unsupported digest: {}", digest_name) }; let msg = test_case.consume_bytes("Msg"); let msg = untrusted::Input::from(&msg); let m_hash = digest::digest(alg.digest_alg(), msg.as_slice_less_safe()); let encoded = test_case.consume_bytes("EM"); let encoded = untrusted::Input::from(&encoded); let _ = test_case.consume_bytes("Salt"); let bit_len = test_case.consume_usize_bits("Len"); let is_valid = test_case.consume_string("Result") == "P"; let actual_result = encoded.read_all(error::Unspecified, | m | alg.verify(m_hash, m, bit_len)); assert_eq!(actual_result.is_ok(), is_valid); Ok(()) } );
+ }
+ 
+ #[cfg(feature = "alloc")]
+ #[test]
+ fn test_pss_padding_encode() {
+ test::run(test_vector_file!("rsa_pss_padding_tests.txt"), | section, test_case | { assert_eq!(section, ""); let digest_name = test_case.consume_string("Digest"); let alg = match digest_name.as_ref() { "SHA256" => &RSA_PSS_SHA256, "SHA384" => &RSA_PSS_SHA384, "SHA512" => &RSA_PSS_SHA512, _ => panic!("Unsupported digest: {}", digest_name) }; let msg = test_case.consume_bytes("Msg"); let salt = test_case.consume_bytes("Salt"); let encoded = test_case.consume_bytes("EM"); let bit_len = test_case.consume_usize_bits("Len"); let expected_result = test_case.consume_string("Result"); if expected_result != "P" { return Ok(()); } let rng = test::rand::FixedSliceRandom { bytes: &salt }; let mut m_out = vec ! [0u8; bit_len.as_usize_bytes_rounded_up()]; let digest = digest::digest(alg.digest_alg(), &msg); #[allow(deprecated)] alg.encode(digest, &mut m_out, bit_len, &rng).unwrap(); assert_eq!(m_out, encoded); Ok(()) } );
+ }
+ 
+}
+

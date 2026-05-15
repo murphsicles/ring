@@ -1,0 +1,151 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/agreement.rs
+
+use crate::{ cpu, debug, ec, error, rand };
+pub use crate::ec::{ curve25519::x25519::X25519, suite_b::ecdh::{ ECDH_P256, ECDH_P384 } };
+/// A key agreement algorithm.
+pub struct Algorithm {
+ curve: &ec::Curve,
+ ecdh: _,
+}
+
+derive_debug_via_field!(Algorithm, curve);
+impl Eq for Algorithm {
+}
+
+impl PartialEq for Algorithm {
+ fn eq(&self, other: &Self) -> bool {
+ self.curve.id == other.curve.id
+ }
+ 
+}
+
+/// An ephemeral private key for use(only) with `agree_ephemeral`. The
+/// signature of `agree_ephemeral` ensures that an `EphemeralPrivateKey` can be
+/// used for at most one key agreement.
+pub struct EphemeralPrivateKey {
+ private_key: ec::Seed,
+ algorithm: &Algorithm,
+}
+
+derive_debug_via_field!(EphemeralPrivateKey, stringify!(EphemeralPrivateKey), algorithm);
+impl EphemeralPrivateKey {
+ pub fn generate(alg: &Algorithm, rng: &_) -> Result<Self, error::Unspecified> {
+ let cpu_features = cpu::features();
+ let private_key = ec::Seed::generate(alg.curve, rng, cpu_features) ?;
+ Ok(Self { private_key, algorithm: alg })
+ }
+ 
+ pub fn compute_public_key(&self) -> Result<PublicKey, error::Unspecified> {
+ self.private_key.compute_public_key(cpu::features()).map(| public_key | PublicKey { algorithm: self.algorithm, bytes: public_key })
+ }
+ 
+ pub fn algorithm(&self) -> &Algorithm {
+ self.algorithm
+ }
+ 
+ pub fn bytes(&self) -> &[u8] {
+ self.bytes_for_test()
+ }
+ 
+ fn bytes_for_test(&self) -> &[u8] {
+ self.private_key.bytes_less_safe()
+ }
+ 
+}
+
+/// A public key for key agreement.
+#[derive(Clone)]
+pub struct PublicKey {
+ algorithm: &Algorithm,
+ bytes: ec::PublicKey,
+}
+
+impl AsRef<[u8]> for PublicKey {
+ fn as_ref(&self) -> &[u8] {
+ self.bytes.as_ref()
+ }
+ 
+}
+
+impl core::fmt::Debug for PublicKey {
+ fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+ f.debug_struct("PublicKey").field("algorithm", &self.algorithm).field("bytes", &debug::HexStr(self.as_ref())).finish()
+ }
+ 
+}
+
+impl PublicKey {
+ pub fn algorithm(&self) -> &Algorithm {
+ self.algorithm
+ }
+ 
+}
+
+/// An unparsed, possibly malformed, public key for key agreement.
+#[derive(Clone, Copy)]
+pub struct UnparsedPublicKey<B> {
+ algorithm: &Algorithm,
+ bytes: B,
+}
+
+impl<B> AsRef<[u8]> for UnparsedPublicKey<B> where B: AsRef<[u8]> {
+ fn as_ref(&self) -> &[u8] {
+ self.bytes.as_ref()
+ }
+ 
+}
+
+impl<B: core::fmt::Debug> core::fmt::Debug for UnparsedPublicKey<B> where B: AsRef<[u8]> {
+ fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), core::fmt::Error> {
+ f.debug_struct("UnparsedPublicKey").field("algorithm", &self.algorithm).field("bytes", &debug::HexStr(self.bytes.as_ref())).finish()
+ }
+ 
+}
+
+impl<B> UnparsedPublicKey<B> {
+ pub fn new(algorithm: &Algorithm, bytes: B) -> Self {
+ Self { algorithm, bytes }
+ }
+ 
+ pub fn algorithm(&self) -> &Algorithm {
+ self.algorithm
+ }
+ 
+ pub fn bytes(&self) -> &B {
+ &self.bytes
+ }
+ 
+}
+
+/// Performs a key agreement with an ephemeral private key and the given public
+/// key.
+/// 
+/// `my_private_key` is the ephemeral private key to use. Since it is moved, it
+/// will not be usable after calling `agree_ephemeral`, thus guaranteeing that
+/// the key is used for only one key agreement.
+/// 
+/// `peer_public_key` is the peer's public key. `agree_ephemeral` will return
+/// `Err(error_value)` if it does not match `my_private_key's` algorithm/curve.
+/// `agree_ephemeral` verifies that it is encoded in the standard form for the
+/// algorithm and that the key is *valid*; see the algorithm's documentation for
+/// details on how keys are to be encoded and what constitutes a valid key for
+/// that algorithm.
+/// 
+/// After the key agreement is done, `agree_ephemeral` calls `kdf` with the raw
+/// key material from the key agreement operation and then returns what `kdf`
+/// returns.
+#[inline]
+pub fn agree_ephemeral<B: AsRef<[u8]>, R>(my_private_key: EphemeralPrivateKey, peer_public_key: &UnparsedPublicKey<B>, kdf: impl FnOnce) -> Result<R, error::Unspecified> {
+ let peer_public_key = UnparsedPublicKey { algorithm: peer_public_key.algorithm, bytes: peer_public_key.bytes.as_ref() };
+ agree_ephemeral_(my_private_key, peer_public_key, kdf, cpu::features())
+}
+
+fn agree_ephemeral_<R>(my_private_key: EphemeralPrivateKey, peer_public_key: UnparsedPublicKey<&[u8]>, kdf: impl FnOnce, cpu: cpu::Features) -> Result<R, error::Unspecified> {
+ if peer_public_key.algorithm != my_private_key.algorithm { return Err(error::Unspecified); }
+ let alg = &my_private_key.algorithm;
+ let mut shared_key = [0u8; ec::ELEM_MAX_BYTES];
+ let shared_key = &mut shared_key [.. alg.curve.elem_scalar_seed_len];
+ (alg.ecdh)(shared_key, &my_private_key.private_key, untrusted::Input::from(peer_public_key.bytes), cpu ) ?;
+ Ok(kdf(shared_key))
+}
+

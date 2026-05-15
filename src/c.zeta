@@ -1,0 +1,7 @@
+// Auto-converted from /tmp/df-ring-0.17.14/ring-0.17.14/src/c.rs
+
+use core::num::NonZeroUsize;
+type size_t = usize;
+
+type NonZero_size_t = NonZeroUsize;
+
